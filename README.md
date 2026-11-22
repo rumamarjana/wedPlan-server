@@ -31,6 +31,12 @@ npm start
 
 The API runs at `http://localhost:5000`.
 
+## Health and Shutdown
+
+- `GET /` returns basic API status.
+- `GET /health` is available for deployment platform health checks.
+- The server closes HTTP and MongoDB connections gracefully on `SIGTERM` and `SIGINT`.
+
 ## Environment Variables
 
 See `.env.example`. Never commit `.env` or production secrets.
