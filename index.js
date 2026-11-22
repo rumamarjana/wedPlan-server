@@ -128,10 +128,10 @@ async function syncUser(req, res) {
         name: String(authUser.name || ""),
         email: String(authUser.email),
         image: authUser.image || null,
+        role: ["vendor", "admin"].includes(authUser.role) ? authUser.role : "customer",
         updatedAt: new Date(),
       },
       $setOnInsert: {
-        role: authUser.role === "vendor" ? "vendor" : "customer",
         isBlocked: false,
         businessName: "",
         subscriptionPlan: "free",
@@ -158,13 +158,20 @@ app.post("/auth/token", express.json(), async (req, res) => {
   const userId = id(session.userId);
   if (!userId) return res.status(401).json({ success: false, message: "Invalid session identity" });
   let account = await users.findOne({ _id: userId });
-  if (!account && user?.id) {
+  if (user?.id && ["vendor", "admin", "customer"].includes(user.role)) {
+    // Better Auth is the source of truth for the role, so keep the API copy in
+    // sync even for accounts that were created before role syncing existed.
     await users.updateOne(
       { _id: userId },
       {
-        $set: { name: user.name || "", email: user.email, image: user.image || null, updatedAt: new Date() },
+        $set: {
+          name: user.name || "",
+          email: user.email,
+          image: user.image || null,
+          role: user.role,
+          updatedAt: new Date(),
+        },
         $setOnInsert: {
-          role: user.role === "vendor" ? "vendor" : "customer",
           isBlocked: false,
           businessName: "",
           subscriptionPlan: "free",
@@ -311,7 +318,14 @@ app.post("/bookings", authenticate, allowRoles("customer"), async (req, res) => 
     return res.status(400).json({ success: false, message: "Service, event date and location are required" });
   }
   if (!ObjectId.isValid(serviceId)) return res.status(400).json({ success: false, message: "Invalid service id" });
-  const service = await services.findOne({ _id: new ObjectId(serviceId), status: "approved", active: true });
+  // Legacy/seeded services have no moderation status, but they are published
+  // in the catalog, so treat them as approved. Pending/rejected services stay
+  // unbookable until an admin approves them.
+  const service = await services.findOne({
+    _id: new ObjectId(serviceId),
+    active: true,
+    status: { $nin: ["pending", "rejected"] },
+  });
   if (!service) return res.status(404).json({ success: false, message: "Approved active service not found" });
   if (service.vendorId === req.user.id) return res.status(403).json({ success: false, message: "You cannot book your own service" });
 
