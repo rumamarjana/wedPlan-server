@@ -147,6 +147,7 @@ async function syncUser(req, res) {
 }
 
 app.get("/", (_req, res) => res.json({ success: true, name: "WedPlan API" }));
+app.get("/health", (_req, res) => res.status(200).json({ status: "healthy" }));
 
 app.post("/auth/token", express.json(), async (req, res) => {
   const { sessionToken, user } = req.body || {};
@@ -476,4 +477,15 @@ app.use((err, _req, res, _next) => {
   res.status(err.message === "Origin not allowed" ? 403 : 500).json({ success: false, message: err.message || "Server error" });
 });
 
-app.listen(port, () => console.log(`WedPlan server running on port ${port}`));
+const server = app.listen(port, () => console.log(`WedPlan server running on port ${port}`));
+
+async function shutdown(signal) {
+  console.log(`${signal} received; closing server`);
+  server.close(async () => {
+    await mongo.close();
+    process.exit(0);
+  });
+}
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
