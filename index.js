@@ -49,74 +49,51 @@ app.get('/users', async (req, res) => {
 // services related api
 
 app.get('/services', async (req, res) => {
+    try {
+        const query = {};
 
-    const query = {};
+        if (req.query.category) {
+            query.category = req.query.category;
+        }
 
-    // Category filter
-    if (req.query.category) {
-        query.category = req.query.category;
+        if (req.query.location) {
+            query.location = {
+                $regex: req.query.location,
+                $options: 'i'
+            };
+        }
+
+        if (req.query.packageType) {
+            query.packageType = req.query.packageType;
+        }
+
+        if (req.query.active !== undefined) {
+            query.active = req.query.active === 'true';
+        }
+
+        if (req.query.search) {
+            query.$or = [
+                { serviceName: { $regex: req.query.search, $options: 'i' } },
+                { description: { $regex: req.query.search, $options: 'i' } },
+                { category: { $regex: req.query.search, $options: 'i' } },
+                { location: { $regex: req.query.search, $options: 'i' } },
+                { features: { $regex: req.query.search, $options: 'i' } }
+            ];
+        }
+
+        const result = await services.find(query).toArray();
+
+        res.status(200).json(result);
+
+    } catch (error) {
+        console.error("Get services error:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch services"
+        });
     }
-
-    // Location filter
-    if (req.query.location) {
-        query.location = {
-            $regex: req.query.location,
-            $options: 'i'
-        };
-    }
-
-    // Package Type filter
-    if (req.query.packageType) {
-        query.packageType = req.query.packageType;
-    }
-
-    // Active services only
-    if (req.query.active) {
-        query.active = req.query.active === 'true';
-    }
-
-    // Search filter
-    if (req.query.search) {
-        query.$or = [
-            {
-                serviceName: {
-                    $regex: req.query.search,
-                    $options: 'i'
-                }
-            },
-            {
-                description: {
-                    $regex: req.query.search,
-                    $options: 'i'
-                }
-            },
-            {
-                category: {
-                    $regex: req.query.search,
-                    $options: 'i'
-                }
-            },
-            {
-                location: {
-                    $regex: req.query.search,
-                    $options: 'i'
-                }
-            },
-            {
-                features: {
-                    $regex: req.query.search,
-                    $options: 'i'
-                }
-            }
-        ];
-    }
-
-    const cursor = servicesCollection.find(query);
-    const result = await cursor.toArray();
-
-    res.send(result);
 });
-
 
 
 
