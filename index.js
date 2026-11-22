@@ -12,9 +12,24 @@ const allowedOrigins = (process.env.CLIENT_ORIGIN || "http://localhost:3000")
   .map((origin) => origin.trim())
   .filter(Boolean);
 
+// Vercel assigns the client a public *.vercel.app URL for every production and
+// preview deployment. Allowing those origins keeps /auth/token (and therefore
+// bookings) working without editing CLIENT_ORIGIN on every deploy. Explicit
+// CLIENT_ORIGIN entries and simple wildcard patterns are still supported.
+function isOriginAllowed(origin) {
+  if (!origin) return true; // non-browser requests (curl, server-to-server)
+  if (allowedOrigins.includes("*") || allowedOrigins.includes(origin)) return true;
+  if (/^https:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)*\.vercel\.app$/i.test(origin)) return true;
+  return allowedOrigins.some((pattern) => {
+    if (!pattern.includes("*")) return false;
+    const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
+    return new RegExp(`^${escaped}$`).test(origin);
+  });
+}
+
 app.use(cors({
   origin(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes("*")) {
+    if (isOriginAllowed(origin)) {
       callback(null, true);
     } else {
       callback(new Error("Origin not allowed"));
@@ -158,9 +173,13 @@ app.post("/auth/token", express.json(), async (req, res) => {
   const userId = id(session.userId);
   if (!userId) return res.status(401).json({ success: false, message: "Invalid session identity" });
   let account = await users.findOne({ _id: userId });
-  if (user?.id && ["vendor", "admin", "customer"].includes(user.role)) {
-    // Better Auth is the source of truth for the role, so keep the API copy in
-    // sync even for accounts that were created before role syncing existed.
+  if (user?.id) {
+    // Better Auth is the source of truth for the role. Preserve an existing
+    // API role when an older session has no role attached, and default to
+    // "customer" for brand-new accounts so the upsert always succeeds.
+    const role = ["vendor", "admin", "customer"].includes(user.role)
+      ? user.role
+      : account?.role || "customer";
     await users.updateOne(
       { _id: userId },
       {
@@ -168,7 +187,7 @@ app.post("/auth/token", express.json(), async (req, res) => {
           name: user.name || "",
           email: user.email,
           image: user.image || null,
-          role: user.role,
+          role,
           updatedAt: new Date(),
         },
         $setOnInsert: {

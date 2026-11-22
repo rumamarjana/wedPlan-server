@@ -43,6 +43,8 @@ See `.env.example`. Never commit `.env` or production secrets.
 
 Required variables include `MONGODB_URI`, `MONGODB_DB_NAME`, `CLIENT_ORIGIN`, `JWT_SECRET`, `BETTER_AUTH_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and `STRIPE_PREMIUM_PRICE_ID`.
 
+`MONGODB_URI` / `MONGODB_DB_NAME` must point at the **same** database as the client's Better Auth config, and `BETTER_AUTH_SECRET` must match the client's secret — `POST /auth/token` reads Better Auth sessions directly from that database. `CLIENT_ORIGIN` must include the deployed client origin; Vercel client domains are allowed automatically.
+
 ## Stripe Webhook
 
 Register `POST /webhook/stripe` in Stripe and subscribe to `checkout.session.completed`, `customer.subscription.updated`, and `customer.subscription.deleted`.
